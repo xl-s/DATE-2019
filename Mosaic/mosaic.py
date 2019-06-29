@@ -80,13 +80,15 @@ def crop_images(images):
 def resize_images(images, size=0):
 	if not size:
 		sizes = [np.shape(image)[0] for image in images]
-		size = min(sizes)
-	print('Resizing images to {}x{} pixels...'.format(size, size))
+		size = (min(sizes), min(sizes))
+
+	if type(size) == int: size = (size, size)
+	print('Resizing images to {}x{} pixels...'.format(size[0], size[1]))
 
 	resized_images = []
 	for image in images:
 		if np.shape(image)[0] != size:
-			resized_image = cv2.resize(image, (size, size), interpolation=cv2.INTER_AREA)
+			resized_image = cv2.resize(image, size, interpolation=cv2.INTER_AREA)
 		else:
 			resized_image = image
 		resized_images.append(resized_image)
@@ -107,11 +109,10 @@ def save_images(images, folder='processed', raw=False, names=0):
 
 def map_images(pairings, images, shape=(26, 26)):
 	pairings = np.reshape(pairings, shape)
-	print(images)
+	print('Stitching images...')
 	lines = []
 	for row in pairings:
 		lines.append(np.hstack([images[i] for i in row]))
 
 	image = np.vstack(lines)
 	return image
-		
