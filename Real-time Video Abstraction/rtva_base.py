@@ -91,7 +91,7 @@ class Stream(Video):
 
 	def stop(self):
 		for plugin in self.plugins:
-			plugin.stop()
+			if 'stop' in dir(plugin): plugin.stop()
 		cv2.destroyAllWindows()
 
 	def get_frames(self):
