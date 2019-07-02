@@ -13,7 +13,6 @@ class Video:
 		self.name = name
 		self.delay = delay
 		self.frame_rate = frame_rate
-		self.asd = 0
 
 	def mouse_event_handler(self, event, x, y, flags, param):
 		pass
