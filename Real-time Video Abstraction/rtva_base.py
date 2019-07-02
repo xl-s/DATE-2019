@@ -19,7 +19,7 @@ class Video:
 
 	def start_plugins(self, plugins):
 		for plugin in plugins:
-			plugin.start(self)
+			if 'start' in dir(plugin): plugin.start(self)
 
 	def start_additional(self):
 		pass
@@ -44,7 +44,7 @@ class Video:
 	def stop(self):
 		self.video.release()
 		for plugin in self.plugins:
-			plugin.stop()
+			if 'stop' in dir(plugin): plugin.stop()
 		cv2.destroyAllWindows()
 
 	def next_frame(self):
