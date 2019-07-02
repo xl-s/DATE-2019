@@ -42,3 +42,32 @@ Stream().start(url='https://www.twitch.tv/randomstreamer', plugins=[Record()])
 
 For the `Stream` class to operate properly, you should be able to call `ffmpeg` from your windows command line (add `ffmpeg.exe` to your PATH environment variables).
 Alternatively, you can just place `ffmpeg.exe` in your working directory, and change `'ffmpeg'` of the `spcmd` on line 140 to `'ffmpeg.exe'` (I haven't actually tried this, but it should work).
+
+## Plugins
+
+#### `Record`
+This plugin enables the recording of whichever video stream is being displayed with the <kbd>SPACE</kbd> key. The output file name may be changed by specify the `output_name` parameter on initialization.
+
+#### `ColourTrack`
+Tracks the average position of a colour on the video. This colour is selected by left-clicking on the video.
+
+#### `EdgeDetect`
+Find edges on the video using the Canny edge detection algorithm. This may be done either through the red, green, blue, or grayscale channels.
+
+#### `ColourFilter`
+Filter the video for a certain range of colours, specified as HSV values in the `lower_hsv` and `upper_hsv` parameters on initialization.
+
+#### `ROIFilter`
+Filter the video to a certain range of the image, specified as list/array with format `[[top_left], [bottom_right]]` in the `roi` parameter on initialization. The range of image may be provided as a proportion of the image (set all values <= 1) or as a pixel resolution value (set any value > 1).
+
+#### `ObjectFinder`
+Find an object in the video using Haar cascade classification. The `.xml` file of the trained classifier should be provided in the `object_data` parameter on initialization. Otherwise, the plugin defaults to using the built-in OpenCV face detection.
+
+#### `BackgroundSubtractMOG`
+Find the foreground objects in the video using OpenCV's built-in background subtraction algorithm.
+
+#### `BackgroundSubtractDirect`
+A customized background subtraction algorithm with a more sensitive response, designed to detect UI elements (after inversion). Note that this operates much more slowly than the built-in MOG algorithm.
+
+#### `Invert`
+Invert the video.
