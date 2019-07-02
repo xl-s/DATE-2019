@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-
+import rtva_base
 
 class Record:
 
@@ -214,19 +214,64 @@ class ObjectFinder:
 		return frame.astype(np.uint8)
 
 
-class BackgroundSubtract:
+class BackgroundSubtractMOG:
 
 	def settings_handler(self, pos):
-		self.mask = cv2.getTrackbarPos('BS Mask', 'Settings')
+		self.mask = cv2.getTrackbarPos('BSM Mask', 'Settings')
 
 	def start(self, parent):
 		cv2.namedWindow('Settings', cv2.WINDOW_NORMAL)
-		cv2.createTrackbar('BS Mask', 'Settings', 0, 1, self.settings_handler)
+		cv2.createTrackbar('BSM Mask', 'Settings', 0, 1, self.settings_handler)
 		self.mask = 0
 		self.subtractor = cv2.bgsegm.createBackgroundSubtractorMOG()
 
 	def run(self, parent, frame):
 		mask = self.subtractor.apply(frame)
+		if self.mask:
+			frame = mask
+		return frame
+
+
+class BackgroundSubtractDirect:
+
+	def __init__(self, threshold=10, minimum_samples=10, recency=30, sample_period=10, smooth=True):
+		self.images = []
+		self.minimum_samples = minimum_samples
+		self.threshold = threshold
+		self.recency = recency
+		self.count = 0
+		self.sample_period = sample_period
+		self.smooth = smooth
+
+	def settings_handler(self, pos):
+		self.mask = cv2.getTrackbarPos('BSD Mask', 'Settings')
+
+	def start(self, parent):
+		cv2.namedWindow('Settings', cv2.WINDOW_NORMAL)
+		cv2.createTrackbar('BSD Mask', 'Settings', 0, 1, self.settings_handler)
+		self.mask = 0
+
+	def apply(self, image):
+		if self.recency:
+			if len(self.images) > self.recency:
+				self.images = self.images[:-1]
+		if self.count >= self.sample_period: 
+			self.images.append(image)
+			self.count = 0
+		else:
+			self.count += 1
+
+		if len(self.images) < self.minimum_samples: return image
+
+		error = cv2.cvtColor((np.average([cv2.absdiff(ref, image) for ref in self.images], axis=0)).astype(np.uint8), cv2.COLOR_BGR2GRAY)
+		mask = np.where(error<=self.threshold, 0, 255).astype(np.uint8)
+		kernel = np.ones((3, 3), np.uint8)
+
+		if self.smooth: mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+		return mask
+
+	def run(self, parent, frame):
+		mask = self.apply(frame)
 		if self.mask:
 			frame = mask
 		return frame
