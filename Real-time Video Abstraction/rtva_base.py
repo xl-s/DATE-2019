@@ -15,7 +15,8 @@ class Video:
 		self.frame_rate = frame_rate
 
 	def mouse_event_handler(self, event, x, y, flags, param):
-		pass
+		for plugin in self.plugins:
+			if 'mouse_event' in dir(plugin): plugin.mouse_event(event, x, y, flags, param)
 
 	def start_plugins(self, plugins):
 		for plugin in plugins:
