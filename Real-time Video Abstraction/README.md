@@ -43,7 +43,7 @@ Stream().start(url='https://www.twitch.tv/randomstreamer', plugins=[Record()])
 - FFmpeg  (https://ffmpeg.org)
 
 For the `Stream` class to operate properly, you should be able to call `ffmpeg` from your windows command line (add `ffmpeg.exe` to your PATH environment variables).
-Alternatively, you can just place `ffmpeg.exe` in your working directory, and change `'ffmpeg'` of the `spcmd` on line 140 to `'ffmpeg.exe'` (I haven't actually tried this, but it should work).
+Alternatively, you can just place `ffmpeg.exe` in your working directory, and change `'ffmpeg'` of the `spcmd` on line 135 to `'ffmpeg.exe'` (I haven't actually tried this, but it should work).
 
 ## Plugins
 
