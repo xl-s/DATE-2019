@@ -15,26 +15,18 @@ class Video:
 		self.frame_rate = frame_rate
 
 	def mouse_event_handler(self, event, x, y, flags, param):
-		for plugin in self.plugins:
-			if 'mouse_event' in dir(plugin): plugin.mouse_event(event, x, y, flags, param)
+		if self.plugins:
+			for plugin in self.plugins:
+				if 'mouse_event' in dir(plugin): plugin.mouse_event(event, x, y, flags, param)
 
 	def start_plugins(self, plugins):
 		for plugin in plugins:
 			if 'start' in dir(plugin): plugin.start(self)
 
-	def start_additional(self):
-		pass
-
 	def run_plugins(self, frame):
 		for plugin in self.plugins:
-			frame = plugin.run(self, frame)
+			frame = plugin.run(frame)
 		return frame
-
-	def pre_processing(self, frame):
-		return frame
-
-	def post_processing(self, frame):
-		pass
 
 	def key_funcs(self, key):
 		if self.plugins:
@@ -44,8 +36,9 @@ class Video:
 
 	def stop(self):
 		self.video.release()
-		for plugin in self.plugins:
-			if 'stop' in dir(plugin): plugin.stop()
+		if self.plugins:
+			for plugin in self.plugins:
+				if 'stop' in dir(plugin): plugin.stop()
 		cv2.destroyAllWindows()
 
 	def next_frame(self):
@@ -62,9 +55,7 @@ class Video:
 			if not ret: break
 
 			if self.plugins: frame = self.run_plugins(frame)
-			frame = self.pre_processing(frame)
 			cv2.imshow(self.name, frame)
-			self.post_processing(frame)
 
 			k = cv2.waitKey(self.delay)
 			if not self.key_funcs(k):
@@ -78,7 +69,6 @@ class Video:
 
 		if plugins: self.start_plugins(plugins)
 		self.plugins = plugins
-		self.start_additional()
 
 		cv2.setMouseCallback(self.name, self.mouse_event_handler)
 		self.period = 1/self.frame_rate
@@ -90,8 +80,9 @@ class Video:
 class Stream(Video):
 
 	def stop(self):
-		for plugin in self.plugins:
-			if 'stop' in dir(plugin): plugin.stop()
+		if self.plugins:
+			for plugin in self.plugins:
+				if 'stop' in dir(plugin): plugin.stop()
 		cv2.destroyAllWindows()
 
 	def get_frames(self):
@@ -109,9 +100,7 @@ class Stream(Video):
 				continue
 
 			if self.plugins: frame = self.run_plugins(frame)
-			frame = self.pre_processing(frame)
 			cv2.imshow(self.name, frame)
-			self.post_processing(frame)
 
 			k = cv2.waitKey(self.delay)
 			if not self.key_funcs(k):
@@ -120,22 +109,28 @@ class Stream(Video):
 		self.stop()
 
 	def start(self, url, resolution='480p', plugins=None):
+		print('Starting live stream...')
 		res_dict = {'360p': {'width':640, 'height':360},
 					'480p': {'width':854, 'height':480},
 					'720p': {'width':1280, 'height':720},
-					'720p60':{'width':1280, 'height':720},
-					'1080p':{'width':1920, 'height':1080},
-					'1080p60':{'width':1920, 'height':1080}}
+					'720p60': {'width':1280, 'height':720},
+					'1080p': {'width':1920, 'height':1080},
+					'1080p48': {'width':1920, 'height':1080},
+					'1080p60': {'width':1920, 'height':1080}}
 
+		print('Finding stream source...')
 		streams = get_streams(url)
 		if resolution not in streams.keys():
-			print('Selected resolution not available.')
+			print('Selected {} resolution not available.'.format(resolution))
+			print('Please choose one from the following:')
+			print(streams.keys())
 			return None
 		feed = streams[resolution].url
 		if 'twitch' in url: res_dict['480p'] = {'width':852, 'height':480}
-		if resolution[-2:] == '60': self.frame_rate = 60
+		if 'p' not in resolution[-2:]: self.frame_rate = int(resolution[-2:])
 		self.height = res_dict[resolution]['height']
 		self.width = res_dict[resolution]['width']
+		print('Stream source found. Connecting...')
 
 		spcmd = ['ffmpeg',
 				 '-i', feed,
@@ -147,6 +142,7 @@ class Stream(Video):
 				 '-']
 		self.pipe = sp.Popen(spcmd, stdin=sp.PIPE, stdout=sp.PIPE)
 		self.buffer = Queue()
+		print('Connection established. Beginning output...')
 
 		cv2.namedWindow(self.name, cv2.WINDOW_NORMAL)
 		cv2.setMouseCallback(self.name, self.mouse_event_handler)
@@ -155,7 +151,6 @@ class Stream(Video):
 
 		if plugins: self.start_plugins(plugins)
 		self.plugins = plugins
-		self.start_additional()
 
 		buffer_thread = Thread(target=self.get_frames)
 		buffer_thread.start()

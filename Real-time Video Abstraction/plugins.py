@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 
+
 class Record:
 
 	def __init__(self, output_name='output.mp4'):
@@ -11,7 +12,7 @@ class Record:
 		self.width, self.height = 0, 0
 		self.frame_rate = parent.frame_rate
 
-	def run(self, parent, frame):
+	def run(self, frame):
 		if not self.width or not self.height:
 			self.height, self.width, _ = frame.shape
 		if self.recording: self.output.write(frame)
@@ -82,7 +83,7 @@ class ColourTrack:
 			pos = 0
 		return pos
 
-	def run(self, parent, frame):
+	def run(self, frame):
 		self.frame = frame
 
 		if self.colour.any() and len(frame.shape) == 3:
@@ -127,7 +128,7 @@ class EdgeDetect:
 		edges = cv2.Canny(image, self.thresh_lower, self.thresh_upper)
 		return edges
 
-	def run(self, parent, frame):
+	def run(self, frame):
 		mask = np.zeros(frame.shape[:2])
 		dims = len(frame.shape)
 		if self.mask_blue and dims == 3:
@@ -156,9 +157,11 @@ class EdgeDetect:
 
 class ColourFilter:
 
-	def __init__(self, lower_hsv, upper_hsv):
-		self.lower = lower_hsv
-		self.upper = upper_hsv
+	def __init__(self, lower_hsv, upper_hsv, smooth=0, substitute=False):
+		self.lower = np.array(lower_hsv, np.uint8)
+		self.upper = np.array(upper_hsv, np.uint8)
+		self.smooth = smooth
+		self.sub = substitute
 
 	def settings_handler(self, pos):
 		self.mask = cv2.getTrackbarPos('CF Mask', 'Settings')
@@ -168,17 +171,26 @@ class ColourFilter:
 		cv2.createTrackbar('CF Mask', 'Settings', 0, 1, self.settings_handler)
 		self.mask = 0
 
-	def run(self, parent, frame):
+	def run(self, frame):
 		hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-		if self.mask: frame = cv2.inRange(hsv, self.lower, self.upper)
+		if self.mask: 
+			mask = cv2.inRange(hsv, self.lower, self.upper)
+			if self.smooth: 
+				kernel = np.ones((self.smooth, self.smooth), np.uint8)
+				mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+			if self.sub:
+				mask = cv2.bitwise_and(frame, frame, mask=mask)
+			frame = mask
 		return frame
 
 
 class ROIFilter:
 
 	def __init__(self, roi):
-		self.roi = np.array(roi)
-		if max(self.roi.reshape(-1)) > 1:
+		roi = np.array(roi)
+		if len(roi.shape) == 2: roi = np.array([roi])
+		self.rois = roi
+		if max(self.rois.reshape(-1)) > 1:
 			self.width, self.height = 1, 1
 		else:
 			self.width, self.height = 0, 0
@@ -188,16 +200,22 @@ class ROIFilter:
 
 	def start(self, parent):
 		cv2.namedWindow('Settings', cv2.WINDOW_NORMAL)
-		cv2.createTrackbar('ROI Filter', 'Settings', 0, 1, self.settings_handler)
+		cv2.createTrackbar('ROI Filter', 'Settings', 0, len(self.rois), self.settings_handler)
 		self.mask = 0
 
-	def run(self, parent, frame):
+	def run(self, frame):
 		if not self.width or not self.height:
 			self.height, self.width, _ = frame.shape
 
 		if self.mask: 
-			frame = frame[int(self.roi[1,0]*self.height):int(self.roi[1,1]*self.height), 
-						  int(self.roi[0,0]*self.width):int(self.roi[0,1]*self.width)]
+			roi = self.rois[self.mask-1]
+			frame = frame[int(roi[0,1]*self.height):int(roi[1,1]*self.height+1), 
+						  int(roi[0,0]*self.width):int(roi[1,0]*self.width+1)]
+		else:
+			for roi in self.rois:
+				ul = tuple((roi[0]*[self.width, self.height]).astype(int))
+				br = tuple((roi[1] *[self.width, self.height]).astype(int))
+				cv2.rectangle(frame, ul, br, (0, 0, 255), 2)
 		return frame
 
 
@@ -206,7 +224,7 @@ class ObjectFinder:
 	def __init__(self, object_data=cv2.data.haarcascades+'haarcascade_frontalface_default.xml'):
 		self.cascade = cv2.CascadeClassifier(object_data)
 
-	def run(self, parent, frame):
+	def run(self, frame):
 		objects = self.cascade.detectMultiScale(frame, 1.3, 5)
 		for x, y, w, h in objects:
 			cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 255), 2)
@@ -224,7 +242,7 @@ class BackgroundSubtractMOG:
 		self.mask = 0
 		self.subtractor = cv2.bgsegm.createBackgroundSubtractorMOG()
 
-	def run(self, parent, frame):
+	def run(self, frame):
 		mask = self.subtractor.apply(frame)
 		if self.mask:
 			frame = mask
@@ -253,7 +271,7 @@ class BackgroundSubtractDirect:
 	def apply(self, image):
 		if self.recency:
 			if len(self.images) > self.recency:
-				self.images = self.images[:-1]
+				self.images = self.images[1:]
 		if self.count >= self.sample_period: 
 			self.images.append(image)
 			self.count = 0
@@ -269,7 +287,7 @@ class BackgroundSubtractDirect:
 		if self.smooth: mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
 		return mask
 
-	def run(self, parent, frame):
+	def run(self, frame):
 		mask = self.apply(frame)
 		if self.mask:
 			frame = mask
@@ -286,11 +304,164 @@ class Invert:
 		cv2.createTrackbar('Invert', 'Settings', 0, 1, self.settings_handler)
 		self.mask = 0
 
-	def run(self, parent, frame):
+	def run(self, frame):
 		dims = len(frame.shape)
 		if self.mask:
 			if dims == 3:
 				frame = (np.ones(frame.shape)*255 - frame).astype(np.uint8)
 			elif dims == 2:
 				frame = np.where(frame>0, 0, 255).astype(np.uint8)
+		return frame
+
+
+class ClickInfo:
+
+	def mouse_event(self, event, x, y, flags, param):
+		if event == cv2.EVENT_LBUTTONDOWN:
+			bgr = self.frame[y,x]
+			hsv = cv2.cvtColor(np.array([[bgr]], np.uint8), cv2.COLOR_BGR2HSV)
+			prop = (x/self.width, y/self.height)
+			print('\nPixel Location: ({}, {})'.format(x, y))
+			print('RGB Colour: {}'.format(bgr[::-1]))
+			print('HSV Colour: {}'.format(hsv[0][0]))
+			print('Relative Location: ({}, {})'.format(round(prop[0], 5), round(prop[1], 5)))
+
+	def start(self, parent):
+		self.height, self.width = 0, 0
+
+	def run(self, frame):
+		if not self.height or not self.width:
+			self.height, self.width, _ = frame.shape
+		self.frame = frame
+		return frame
+
+
+class Otsu:
+
+	def __init__(self, substitute=False):
+		self.sub = substitute
+
+	def settings_handler(self, pos):
+		self.mask = cv2.getTrackbarPos('Otsu', 'Settings')
+
+	def start(self, parent):
+		cv2.namedWindow('Settings', cv2.WINDOW_NORMAL)
+		cv2.createTrackbar('Otsu', 'Settings', 0, 1, self.settings_handler)
+		self.mask = 0
+
+	def run(self, frame):
+		if self.mask:
+			gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+			_, otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+			if self.sub:
+				otsu = cv2.bitwise_and(frame, frame, mask=otsu)
+			frame = otsu
+		return frame
+
+
+class TemplateMatch:
+
+	def __init__(self, template, mode=0):
+		self.template = template
+		self.height, self.width, _ = self.template.shape
+		self.mode = mode
+
+	def settings_handler(self, pos):
+		self.threshold = cv2.getTrackbarPos('TM Threshold', 'Settings')/100
+
+	def start(self, parent):
+		cv2.namedWindow('Settings', cv2.WINDOW_NORMAL)
+		cv2.createTrackbar('TM Threshold', 'Settings', 80, 100, self.settings_handler)
+		self.threshold = 0.8
+
+	def run(self, frame):
+		search = cv2.matchTemplate(frame, self.template, cv2.TM_CCOEFF_NORMED)
+		if self.threshold == 1:
+			_, max_val, _, max_loc = cv2.minMaxLoc(search)
+			cv2.rectangle(frame, max_loc, (max_loc[0] + self.width, max_loc[1] + self.height), (0, 0, 255), 2)
+		else:
+			matches = np.where(search >= self.threshold)
+			for pt in zip(*matches[::-1]):
+				cv2.rectangle(frame, pt, (pt[0] + self.width, pt[1] + self.height), (0, 0, 255), 2)
+		return frame
+
+
+class Screenshot:
+
+	def key_func(self, key):
+		if key == 32:
+			self.take = True
+
+	def start(self, parent):
+		self.take = False
+
+	def run(self, frame):
+		if self.take:
+			cv2.imwrite('screenshot.png', frame)
+			self.take = False
+			print('Screenshot taken.')
+		return frame
+
+
+class Gray:
+
+	def settings_handler(self, pos):
+		self.mask = cv2.getTrackbarPos('Gray', 'Settings')
+
+	def start(self, parent):
+		cv2.namedWindow('Settings', cv2.WINDOW_NORMAL)
+		cv2.createTrackbar('Gray', 'Settings', 0, 1, self.settings_handler)
+		self.mask = 0
+
+	def run(self, frame):
+		if self.mask:
+			frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+		return frame
+
+
+class Contour:
+
+	def settings_handler(self, pos):
+		self.mask = cv2.getTrackbarPos('Contour Mask', 'Settings')
+
+	def start(self, parent):
+		cv2.namedWindow('Settings', cv2.WINDOW_NORMAL)
+		cv2.createTrackbar('Contour Mask', 'Settings', 0, 1, self.settings_handler)
+		self.mask = 0
+
+	def run(self, frame):
+		if self.mask:
+			_, thresh = cv2.threshold(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), 0, 255, cv2.THRESH_BINARY+cv2.THRESH_OTSU)
+			contours, _ = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+			approxes = []
+			# for cnt in contours:
+				# eps = 0.05*cv2.arcLength(cnt, True)
+				# approxes.append(cv2.approxPolyDP(cnt, eps, True))
+				# if len(cnt) == 4:
+					# approxes.append(cnt)
+			frame = np.zeros(frame.shape, np.uint8)
+			frame = cv2.drawContours(frame, contours, -1, (0, 255, 0), 1)
+		return frame
+
+
+class HoughLineHorizontal:
+
+	def settings_handler(self, pos):
+		self.minlength = cv2.getTrackbarPos('Min. Length', 'Settings')
+		self.maxlength = cv2.getTrackbarPos('Max. Length', 'Settings')
+
+	def start(self, parent):
+		cv2.namedWindow('Settings', cv2.WINDOW_NORMAL)
+		cv2.createTrackbar('Min. Length', 'Settings', 100, 200, self.settings_handler)
+		cv2.createTrackbar('Max. Length', 'Settings', 150, 200, self.settings_handler)
+		self.minlength = 100
+		self.maxlength = 150
+
+	def run(self, frame):
+		edges = cv2.Canny(frame, 50, 150, apertureSize=3)
+		lines = cv2.HoughLinesP(edges, 1, np.pi/180, 100, minLineLength=self.minlength, maxLineGap=5)
+		for line in lines:
+			x1, y1, x2, y2 = line[0]
+			if (not(y2 - y1)) and (abs(x2-x1) < self.maxlength):
+				cv2.line(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
 		return frame
