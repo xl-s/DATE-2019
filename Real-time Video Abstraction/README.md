@@ -1,3 +1,5 @@
+**Update 3/7/19:** Removed redundant functions (`pre_processing`, `post_pocessing`, etc) from `Video` and `Stream` classes. Also removed `parent` parameter from `Plugin.run` for better optimization. Parent properties may still be accessed and changed with `Plugin.start`.
+
 # Real-time Video Abstraction
 
 The base file contains two classes: `Video` and `Stream`.
@@ -10,7 +12,7 @@ A `url` parameter must be specified for `Stream.start()` - this should be the UR
 A `capture` parameter may also optionally be specified for `Video.start()`. This can be a local video file, or a web source as well (however, you are likely to run into issues if you do this - hence the existence of `Stream`, which you should use for live streaming sources instead).
 
 Finally, an additional parameter, `plugins`, may be specified for either `Video` or `Stream`.
-This should be a list of plugin objects. Each plugin class should minimally contain a `Plugin.run(self, parent, frame)` method. This will be called whenever a new frame is loaded on the parent class, and should return a frame as well (with any desired processing performed on it).
+This should be a list of plugin objects. Each plugin class should minimally contain a `Plugin.run(self, frame)` method. This will be called whenever a new frame is loaded on the parent class, and should return a frame as well (with any desired processing performed on it).
 Additionally, the following methods may be optionally included:
 
 - `Plugin.start(self, parent)`, which is called when the parent class is initialized.
@@ -71,3 +73,24 @@ A customized background subtraction algorithm with a more sensitive response, de
 
 #### `Invert`
 Invert the video.
+
+#### `ClickInfo`
+Obtain information about a pixel on the video by left-clicking on it.
+
+#### `Otsu`
+Perform Otsu binarization.
+
+#### `TemplateMatch`
+Match a template image, specified in the `template` parameter upon initialization, with the video. Set the threshold to 100 to only display the best matching result.
+
+#### `Screenshot`
+Take a screenshot of the current frame by pressing <kbd>SPACE</kbd>.
+
+#### `Gray`
+Display image in grayscale.
+
+#### `Contour`
+Find the contours on the video.
+
+#### `HoughLineHorizontal`
+Find all the regions on the video which approximates a horizontal line.
