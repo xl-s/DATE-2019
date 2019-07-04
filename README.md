@@ -1,3 +1,3 @@
 # DATE 2019
 
-Just some stuff from DATE
+Just some random stuff from DATE
